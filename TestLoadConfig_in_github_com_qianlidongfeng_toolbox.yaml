@@ -1,0 +1,12 @@
+name: liu
+age: 32
+lover:
+  who: unknow
+  do: fuck
+  phone: 123
+  child:
+    [
+      zhangsan
+      lisi
+      wangwu
+    ]
