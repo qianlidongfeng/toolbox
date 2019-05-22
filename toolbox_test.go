@@ -80,3 +80,8 @@ func TestCheckAndFixTable(t *testing.T) {
 	}
 }
 
+func TestStampToTime(t *testing.T) {
+	n:=GetTimeMilliStamp()
+	_=n
+}
+

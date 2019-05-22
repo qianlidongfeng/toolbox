@@ -5,6 +5,7 @@ import (
 	"golang.org/x/text/encoding/simplifiedchinese"
 	"golang.org/x/text/transform"
 	"io/ioutil"
+	"regexp"
 )
 
 func GbkToUtf8b(s []byte) ([]byte, error) {
@@ -16,7 +17,7 @@ func GbkToUtf8b(s []byte) ([]byte, error) {
 	return d, nil
 }
 
-func Utf8ToGbkb(s string) (string, error) {
+func Utf8ToGbk(s string) (string, error) {
 	reader := transform.NewReader(bytes.NewReader([]byte(s)), simplifiedchinese.GBK.NewEncoder())
 	b, err := ioutil.ReadAll(reader)
 	if err != nil {
@@ -25,16 +26,17 @@ func Utf8ToGbkb(s string) (string, error) {
 	return string(b), nil
 }
 
-func GbkToUtf8(s string) (string,error) {
+func GbkToUtf8(s string) (rs string,err error) {
 	reader := transform.NewReader(bytes.NewReader([]byte(s)), simplifiedchinese.GBK.NewDecoder())
 	b, err := ioutil.ReadAll(reader)
 	if err != nil {
-		return "",err
+		return
 	}
-	return string(b), nil
+	rs=string(b)
+	return
 }
 
-func Utf8ToGbk(s []byte) ([]byte, error) {
+func Utf8ToGbkb(s []byte) ([]byte, error) {
 	reader := transform.NewReader(bytes.NewReader(s), simplifiedchinese.GBK.NewEncoder())
 	d, e := ioutil.ReadAll(reader)
 	if e != nil {
@@ -67,4 +69,17 @@ func IsUtf8(buf []byte) bool{
 		}
 	}
 	return nBytes == 0
+}
+
+func GetMapByReg(reg string,content string) map[string]string{
+	exp:=regexp.MustCompile(reg)
+	dict:=exp.FindStringSubmatch(content)
+	groupNames := exp.SubexpNames()
+	m := make(map[string]string)
+	for i, key := range groupNames {
+		if i != 0 && key != "" {
+			m[key] = dict[i]
+		}
+	}
+	return m
 }
