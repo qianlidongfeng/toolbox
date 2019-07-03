@@ -2,6 +2,7 @@ package toolbox
 
 import (
 	"bytes"
+	"github.com/headzoo/surf/errors"
 	"golang.org/x/text/encoding/simplifiedchinese"
 	"golang.org/x/text/transform"
 	"io/ioutil"
@@ -71,15 +72,21 @@ func IsUtf8(buf []byte) bool{
 	return nBytes == 0
 }
 
-func GetMapByReg(reg string,content string) map[string]string{
+func GetMapByReg(reg string,content string) (m map[string]string,err error){
+	defer func() {
+		if e := recover(); e != nil {
+			err = errors.New(e.(string))
+			return
+		}
+	}()
 	exp:=regexp.MustCompile(reg)
 	dict:=exp.FindStringSubmatch(content)
 	groupNames := exp.SubexpNames()
-	m := make(map[string]string)
+	m = make(map[string]string)
 	for i, key := range groupNames {
 		if i != 0 && key != "" {
 			m[key] = dict[i]
 		}
 	}
-	return m
+	return
 }
