@@ -8,3 +8,7 @@ var(
 func init(){
 	cstZone=time.FixedZone("CST", 8*3600)
 }
+
+var(
+	UI=ui{}
+)

@@ -2,9 +2,9 @@ package toolbox
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 	_ "github.com/go-sql-driver/mysql"
-	"errors"
 )
 
 type MySqlConfig struct{
@@ -26,8 +26,12 @@ func InitMysql(config MySqlConfig) (*sql.DB,error){
 	if err != nil{
 		return db,err
 	}
-	db.SetMaxOpenConns(config.MaxOpenConns)
-	db.SetMaxIdleConns(config.MaxIdleConns)
+	if config.MaxOpenConns != 0{
+		db.SetMaxOpenConns(config.MaxOpenConns)
+	}
+	if config.MaxIdleConns != 0{
+		db.SetMaxIdleConns(config.MaxIdleConns)
+	}
 	return db,err
 }
 
@@ -36,6 +40,7 @@ func CheckTable(db *sql.DB,table string,fields map[string]string) error{
 	if err != nil{
 		return err
 	}
+	defer rows.Close()
 	rows.Next()
 	var tb string
 	err = rows.Scan(&tb)
@@ -68,8 +73,15 @@ func CheckTable(db *sql.DB,table string,fields map[string]string) error{
 }
 
 
+type MysqlIndex struct{
+	Name string
+	Typ string
+	Method string
+}
+
 //default use utf8, innodb
-func CheckAndFixTable(db *sql.DB,table string,fields map[string]string) error {
+//索引修复还不完美，索引修复不要和手动混用
+func CheckAndFixTable(db *sql.DB,table string,fields map[string]string,index map[string]MysqlIndex) error {
 	_,err:= db.Exec(fmt.Sprintf(`CREATE TABLE IF NOT EXISTS %s(
 		id BIGINT NOT NULL auto_increment,
 		PRIMARY KEY (id)
@@ -81,6 +93,7 @@ func CheckAndFixTable(db *sql.DB,table string,fields map[string]string) error {
 	if err != nil {
 		return err
 	}
+	defer rows.Close()
 	remoteFields := make(map[string]string)
 	for rows.Next() {
 		var name, typ string
@@ -93,18 +106,141 @@ func CheckAndFixTable(db *sql.DB,table string,fields map[string]string) error {
 	for k, v := range fields {
 		columnType, ok := remoteFields[k]
 		if !ok {
-			_,err:=db.Exec(fmt.Sprintf("ALTER TABLE %s ADD COLUMN %s %s",table,k,v))
+			_,err:=db.Exec(fmt.Sprintf("ALTER TABLE `%s` ADD COLUMN `%s` %s",table,k,v))
 			if err != nil{
 				return err
 			}
 			continue
 		}
 		if columnType != v {
-			_,err=db.Exec(fmt.Sprintf(`ALTER TABLE %s MODIFY COLUMN %s %s`,table,k,v))
+			_,err=db.Exec(fmt.Sprintf("ALTER TABLE `%s` MODIFY COLUMN `%s` %s",table,k,v))
 			if err != nil{
 				return err
 			}
 		}
 	}
+	for k,v:=range index{
+		_,err:=db.Exec(fmt.Sprintf("ALTER TABLE %s ADD %s INDEX `%s`(`%s`) USING %s",table,v.Typ,v.Name,k,v.Method))
+		if err !=nil{
+			continue
+		}
+	}
 	return err
+}
+
+func SelectMapFromMysql(db *sql.DB,selector string) ([]map[string]interface{},error){
+	rows,err:=db.Query(selector)
+	if err != nil{
+		return nil,err
+	}
+	defer rows.Close()
+	cols,err:=rows.ColumnTypes()
+	if err != nil{
+		return nil,err
+	}
+	count:=len(cols)
+	result:=make([]map[string]interface{},0)
+	values := make([]interface{}, count)
+	for rows.Next(){
+		scans := make([]interface{}, count)
+		for i:=range scans{
+			switch(cols[i].ScanType().Name()){
+			case "uint32":
+				scans[i]=new(uint32)
+			case "int32":
+				scans[i]=new(int32)
+			case "uint64":
+				scans[i]=new(uint64)
+			case "int64":
+				scans[i]=new(int32)
+			case "int8":
+				scans[i]=new(int8)
+			case "uint8":
+				scans[i]=new(uint8)
+			case "int16":
+				scans[i]=new(int16)
+			case "uint16":
+				scans[i]=new(uint16)
+			case "float32":
+				scans[i]=new(float32)
+			case "float64":
+				scans[i]=new(float64)
+			default:
+				scans[i]=&values[i]
+			}
+		}
+		err=rows.Scan(scans...)
+		if err != nil{
+			return nil,err
+		}
+		row := make(map[string]interface{})
+		for k, v := range scans { //每行数据是放在values里面，现在把它挪到row里
+			key := cols[k].Name()
+			if value,ok := values[k].([]byte);ok{
+				row[key] = string(value)
+			} else {
+				row[key]=v
+			}
+		}
+		result=append(result,row)
+	}
+	return result,nil
+}
+
+func SelectArrayFromMysql(db *sql.DB,selector string) ([][]interface{},error){
+	rows,err:=db.Query(selector)
+	if err != nil{
+		return nil,err
+	}
+	defer rows.Close()
+	cols,err:=rows.ColumnTypes()
+	if err != nil{
+		return nil,err
+	}
+	count:=len(cols)
+	result:=make([][]interface{},0)
+	values := make([]interface{}, count)
+	for rows.Next(){
+		scans := make([]interface{}, count)
+		for i:=range scans{
+			switch(cols[i].ScanType().Name()){
+			case "uint32":
+				scans[i]=new(uint32)
+			case "int32":
+				scans[i]=new(int32)
+			case "uint64":
+				scans[i]=new(uint64)
+			case "int64":
+				scans[i]=new(int32)
+			case "int8":
+				scans[i]=new(int8)
+			case "uint8":
+				scans[i]=new(uint8)
+			case "int16":
+				scans[i]=new(int16)
+			case "uint16":
+				scans[i]=new(uint16)
+			case "float32":
+				scans[i]=new(float32)
+			case "float64":
+				scans[i]=new(float64)
+			default:
+				scans[i]=&values[i]
+			}
+		}
+		err=rows.Scan(scans...)
+		if err != nil{
+			return nil,err
+		}
+		row := make([]interface{},0)
+		for k, v := range scans { //每行数据是放在values里面，现在把它挪到row里
+			if value,ok := values[k].([]byte);ok{
+				row=append(row,string(value))
+			}else{
+				row=append(row,v)
+			}
+		}
+		result=append(result,row)
+	}
+	return result,nil
 }
